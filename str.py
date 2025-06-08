@@ -65,6 +65,7 @@ async def callback_handler(client, callback_query):
         )
         return
 
+
     if data == "help":
         await callback_query.message.edit_text(
             HELP_TEXT,
@@ -78,18 +79,32 @@ async def callback_handler(client, callback_query):
             "🔑 **Pyrogram String Session**\n\nSend your `API_ID`:",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="start")]])
         )
-        resp_id = await app.listen(callback_query.message.chat.id)
+
+        def check_id(client, message):
+            return message.chat.id == callback_query.message.chat.id and message.text.isdigit()
+
+        resp_id = await app.listen(callback_query.message.chat.id, filters=filters.text & filters.create(check_id))
         await callback_query.message.reply("Now, send your `API_HASH`:")
-        resp_hash = await app.listen(callback_query.message.chat.id)
+
+        def check_hash(client, message):
+            return message.chat.id == callback_query.message.chat.id and len(message.text) == 32
+
+        resp_hash = await app.listen(callback_query.message.chat.id, filters=filters.text & filters.create(check_hash))
         try:
             api_id = int(resp_id.text.strip())
             api_hash = resp_hash.text.strip()
             await callback_query.message.reply("📱 Now, send your phone number (with country code):")
-            phone = (await app.listen(callback_query.message.chat.id)).text
+
+            def check_phone(client, message):
+                return message.chat.id == callback_query.message.chat.id and message.text.startswith("+")
+
+            phone = (await app.listen(callback_query.message.chat.id, filters=filters.text & filters.create(check_phone))).text
             async with Client(":memory:", api_id=api_id, api_hash=api_hash) as user:
                 await user.connect()
                 await user.send_code(phone)
-                code = (await app.listen(callback_query.message.chat.id)).text
+                def check_code(client, message):
+                    return message.chat.id == callback_query.message.chat.id and message.text.isdigit()
+                code = (await app.listen(callback_query.message.chat.id, filters=filters.text & filters.create(check_code))).text
                 await user.sign_in(phone, code)
                 string_session = await user.export_session_string()
                 await callback_query.message.reply(
